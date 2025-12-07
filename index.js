@@ -37,7 +37,7 @@ app.get('/api/records', async (req, res) => {
     }
 
     // 取最後 10 筆資料回傳前端
-    const last10Rows = rows.slice(-10);
+    const last10Rows = rows;
     
     // 轉換格式配合前端需求
     const formattedData = last10Rows.map(row => ({
