@@ -56,6 +56,7 @@ app.get('/api/records', async (req, res) => {
 });
 
 // 路由：寫入資料
+// 修改後的寫入路由：增加重複檢查功能
 app.post('/api/records', async (req, res) => {
   try {
     const { name, date, time, sys, dia } = req.body;
@@ -64,6 +65,28 @@ app.post('/api/records', async (req, res) => {
       return res.status(400).json({ error: '資料不完整' });
     }
 
+    // 1. 先讀取該家人的所有資料，檢查是否重複
+    const getResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${name}!A:B`, // 只讀取日期和時段欄位來比對
+    });
+
+    const rows = getResponse.data.values || [];
+    
+    // 檢查是否有「同日期」且「同時段」的紀錄
+    // 注意：Google Sheet 讀出來的日期格式可能不一，這裡做簡單字串比對
+    const isDuplicate = rows.some(row => {
+        // row[0] 是日期, row[1] 是時段
+        // 簡單比對：假設後端存入的是 YYYY-MM-DD 字串
+        return row[0] === date && row[1] === time;
+    });
+
+    if (isDuplicate) {
+        // 回傳 409 Conflict 錯誤狀態
+        return res.status(409).json({ error: '該時段已經有資料了，請勿重複輸入！' });
+    }
+
+    // 2. 若無重複，則進行寫入
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
       range: `${name}!A:D`,
@@ -77,11 +100,6 @@ app.post('/api/records', async (req, res) => {
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: '寫入 Google Sheet 失敗', details: error.message });
+    res.status(500).json({ error: '寫入失敗', details: error.message });
   }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
 });
